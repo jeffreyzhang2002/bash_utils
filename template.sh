@@ -2,7 +2,6 @@
 
 # Automatically generate high level auto completion trigger by sourcing this file first
 # source <filename>
-
 if [[ ${BASH_SOURCE[0]} != ${0} ]] && [[ -z "${SECRET_SOURCE}" ]]; then
     SCRIPT_FUNCTIONS=$(
         export SECRET_SOURCE="true"; 
@@ -11,14 +10,11 @@ if [[ ${BASH_SOURCE[0]} != ${0} ]] && [[ -z "${SECRET_SOURCE}" ]]; then
 
     __completion() {        
         CURR_WORD="${COMP_WORDS[COMP_CWORD]}"
-
         if [[ $COMP_CWORD == 1 ]]; then
             COMPREPLY=( $(compgen -W "${SCRIPT_FUNCTIONS}" -- "$CURR_WORD") )
         fi
-
         return 0
     }
-
     complete -o nospace -F __completion $(basename ${BASH_SOURCE[0]})
     return 0
 fi
@@ -33,7 +29,6 @@ HELP_MESSAGE_SPACING=35
 
 # Private Functions
 # ------------------------------------------
-
 __printf() {
     if [[ -z "$QUIET" ]]; then
         printf "$@"
@@ -44,12 +39,13 @@ __printf() {
 __is_sudo() {
     out=$(declare -f $1 | awk '
         NR>2 {
-            if($1 != ":") {
-                exit
+            if ( $1 != ":" ) {
+                exit 1
             } else if ($2 == "@sudo;") {
                 print 0; exit
             }
-        }')
+        }
+    ')
 
     if [[ $out == "0" && "$EUID" != 0 ]]; then 
         __printf "\033[31mPlease run as root!:\033[0m\nsudo -E $0 $1\n"
@@ -57,13 +53,25 @@ __is_sudo() {
     fi
 }
 
+__auto_complete() {
+    declare -f $1 | awk '
+        NR>2 {
+            if ( $1 != ":" ) {
+                exit 1
+            } else if ( $2 == "@auto" ) {
+                printf "%s", substr($NF, 1, length($NF)-1)
+            }
+        }
+    '
+}
+
 # Generates Help Messages from commands
 __help() {
     help=$(declare -f $1 | awk ' 
         NR>2 {
             if ( $1 != ":") { 
-                exit 0 
-            } else if ($2 == "@help" ) { 
+                exit 1 
+            } else if ( $2 == "@help" ) { 
                 for(i = 3; i < NF; i++){ 
                     printf "%s ", $i 
                 }
@@ -93,13 +101,12 @@ fi
 function example_function {
 : @help Example Function Help Message
     echo "Commands 1"
-
-
 }
 
 function example_function_requires_sudo {
 : @help This requires sudo
 : @sudo
+: @auto __example_function_requires_sudo
 
     echo "Commands 2"
 
@@ -125,10 +132,12 @@ else
 
     shift
     if [[ $(type -t $CMD) == "function" ]]; then
-        cd $CD_DIR
-        __is_sudo $CMD
-        $CMD $@
+        __auto_complete $CMD
+        # cd $CD_DIR
+        # __is_sudo $CMD
+        # $CMD $@
     else 
         __printf "\033[31m$CMD is not a valid command!\033[0m\n";
     fi
 fi
+
